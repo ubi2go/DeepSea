@@ -1,5 +1,4 @@
 
-
 configure_mine_functions_conf:
   file.managed:
     - name: /etc/salt/minion.d/mine_functions.conf
@@ -11,10 +10,14 @@ add_mine_cephdisks.list_to_minion:
     - name: mine.send
     - func: cephdisks.list
 
+add_mine_packagemanager.list_updates_to_minion:
+  module.run:
+    - name: mine.send
+    - func: packagemanager.list_update
+
 manage_salt_minion_for_mines:
   module.run:
     - name: mine.update
     - watch:
       - file: configure_mine_functions_conf
     - fire_event: True
-

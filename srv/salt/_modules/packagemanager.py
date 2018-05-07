@@ -5,6 +5,7 @@ Intervention into special conditions during package management
 """
 from __future__ import absolute_import
 from subprocess import Popen, PIPE
+import xml.etree.ElementTree as ET
 import logging
 import os
 # pylint: disable=import-error,3rd-party-module-not-gated,redefined-builtin
@@ -216,6 +217,22 @@ class Zypper(PackageManager):
         log.info('No Update Needed')
         return False
 
+    def _list_updates(self):
+        """
+        List all pending updates (transformed from XML)
+        """
+        self._refresh()
+        cmd = "zypper -x lu"
+        log.debug('Executing {}'.format(cmd))
+        proc = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True)
+        stdout, _ = proc.communicate()
+        stdout = __salt__['helper.convert_out'](stdout)
+        root = ET.fromstring(stdout)
+        update_list = list()
+        for child in root.findall('.//update'):
+            update_list.append(child.attrib)
+        return update_list
+
     def _patches_needed(self):
         """
         Updates that are sourced from an official Update
@@ -360,3 +377,21 @@ def migrate(**kwargs):
     pm = Zypper(**kwargs)
     # pylint: disable=protected-access
     pm._migrate()
+
+
+def updates_needed(**kwargs):
+    """
+    Are updates needed?
+    """
+    obj = PackageManager(**kwargs)
+    # pylint: disable=protected-access
+    return obj.pm._updates_needed()
+
+
+def list_updates(**kwargs):
+    """
+    List updates
+    """
+    obj = PackageManager(**kwargs)
+    # pylint: disable=protected-access
+    return obj.pm._list_updates()

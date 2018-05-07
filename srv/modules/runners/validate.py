@@ -29,6 +29,8 @@ from distutils.version import LooseVersion  # pylint: disable=no-name-in-module,
 import yaml
 # pylint: disable=import-error,3rd-party-module-not-gated,redefined-builtin
 import salt.client
+import salt.utils
+import salt.utils.minions
 import salt.utils.error
 # pylint: disable=relative-import
 
@@ -969,6 +971,55 @@ class Validate(Preparation):
                    "See `/srv/pillar/ceph/deepsea_minions.sls` for details")
             self.errors['deepsea_minions'] = [msg]
 
+    def salt_updates(self):
+        """
+        Salt Updates available?  """
+        settings = __utils__['settings.self_']()
+
+        for node in self.matches:
+            update_map = salt.utils.minions.mine_get(node,
+                                                     'packagemanager.list_updates',
+                                                     'glob', settings.__opts__)
+            up_names = []
+            for node, u_list in update_map.items():
+                _ = [up_names.append(x['name']) for x in u_list if 'salt-minion' in x['name'] or
+                                                                    'salt-master' in x['name']]
+        if not up_names:
+            self.passed['salt_update'] = "valid"
+        else:
+            # pylint: disable=line-too-long
+            msg = ("You have a salt update pending. In order to provide a smooth experience, please\
+                    update these packages manually before proceeding.\
+                    salt -I 'roles:master' ceph.updates.master
+                    and
+                    salt -G 'deepsea:*' ceph.updates.salt
+                    in case you have deepsea_minions defined
+                    otherwise run:
+                    salt -I 'cluster:ceph' ceph.updates.salt")
+                    
+            self.error['salt_update'] = [msg]
+
+    def updates_available(self):
+        """
+        Updates available?  """
+        settings = __utils__['settings.self_']()
+
+        for node in self.matches:
+            update_map = salt.utils.minions.mine_get(node,
+                                                     'packagemanager.list_updates',
+                                                     'glob', settings.__opts__)
+            up_names = []
+            for node, u_list in update_map.items():
+                # Improve on the 'ceph' matchings. There is a curated list of pkg names
+                # that match the corresponding role. Maybe that should be moved to the pillar.
+                _ = [up_names.append(x['name']) for x in u_list if 'ceph' in x['name']]
+        if not up_names:
+            self.passed['updates_available'] = "valid"
+        else:
+            # pylint: disable=line-too-long
+            msg = ("On or more of your minions have updates pending that might cause ceph-daemons to restart. This might extend the duration of this Stage depending on your cluster size.")
+            self.warnings['updates_available'] = [msg]
+
     def report(self):
         """
         Print the validation report
@@ -1150,6 +1201,8 @@ def setup(**kwargs):
     valid.master_minion()
     valid.ceph_version()
     valid.salt_version()
+    valid.updates_available()
+    valid.salt_updates()
     valid.report()
 
     if valid.errors:
